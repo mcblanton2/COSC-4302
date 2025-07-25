@@ -72,7 +72,7 @@ int main()
         }
 
         fclose(fp);
-        close(pipefd[1]); // signals end of file or EOD
+        close(pipefd[1]); // signals end of file or EOF
 
         wait(NULL);
     }
