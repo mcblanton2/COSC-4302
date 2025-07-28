@@ -1,0 +1,100 @@
+// minishell.h, the header File
+#define LINE_LEN 80
+#define MAX_ARGS 64
+#define MAX_ARG_LEN 16
+#define MAX_PATHS 64
+#define MAX_PATH_LEN 96
+#define WHITESPACE " \t\n"
+
+struct command_t {
+    char *name;
+    int argc;
+    char *argv[MAX_ARGS];
+};
+
+// main.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include "minishell.h"
+
+void printPrompt() {
+    printf("myshell$ ");
+    fflush(stdout);
+}
+
+void readCommand(char *buffer) {
+    fgets(buffer, LINE_LEN, stdin);
+}
+
+int parseCommand(char *line, struct command_t *cmd) {
+    int argc = 0;
+    char *token = strtok(line, WHITESPACE);
+    while (token != NULL && argc < MAX_ARGS - 1) {
+        cmd->argv[argc++] = token;
+        token = strtok(NULL, WHITESPACE);
+    }
+    cmd->argv[argc] = NULL;
+    cmd->argc = argc;
+    cmd->name = cmd->argv[0];
+    return 0;
+}
+
+int parsePath(char *dirs[]) {
+    char *pathEnvVar = getenv("PATH");
+    char *path = strdup(pathEnvVar);
+    int i = 0;
+    dirs[i] = strtok(path, ":");
+    while (dirs[i] != NULL && i < MAX_PATHS - 1) {
+        dirs[++i] = strtok(NULL, ":");
+    }
+    return i;
+}
+
+char *lookupPath(char *cmd, char *dirs[]) {
+    static char fullPath[MAX_PATH_LEN];
+    for (int i = 0; dirs[i] != NULL; i++) {
+        snprintf(fullPath, sizeof(fullPath), "%s/%s", dirs[i], cmd);
+        if (access(fullPath, X_OK) == 0) {
+            return fullPath;
+        }
+    }
+    return NULL;
+}
+
+int main() {
+    char line[LINE_LEN];
+    char *pathDirs[MAX_PATHS];
+    struct command_t command;
+
+    parsePath(pathDirs);
+
+    while (1) {
+        printPrompt();
+        readCommand(line);
+        parseCommand(line, &command);
+
+        char *path = lookupPath(command.name, pathDirs);
+        if (path == NULL) {
+            fprintf(stderr, "%s: command not found\n", command.name);
+            continue;
+        }
+
+        pid_t pid = fork();
+        if (pid == 0) {
+            execv(path, command.argv);
+            perror("exec failed");
+            exit(1);
+        } else {
+            wait(NULL);
+        }
+    }
+
+    return 0;
+}
+
+// gcc -o myshell main.c
+//./myshell
